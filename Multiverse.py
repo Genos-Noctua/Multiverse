@@ -19,7 +19,7 @@ def compress(pack):
         archive.add(temp + name, name)
     archive.close()
     shutil.rmtree(Service + 'temp', True)
-    
+
 def decompress(pack):
     Service = pack.payload['service']
     temp = pack.payload['temp']
@@ -157,15 +157,5 @@ if __name__ == '__main__':
     files = list()
     while True:
         if active:
-            files = Import(files, factory)
-            temps = files
-            y = 0
-            for _ in range(factory.processes*2):
-                if len(temps) == 0:
-                    break
-                factory.add(temps.pop())
-                y+=1
-            for _ in range(y):
-                temps.append(factory.take())
-            files = temps
-        time.sleep(120)
+            files = factory.map(Import(files, factory))
+        time.sleep(1)
