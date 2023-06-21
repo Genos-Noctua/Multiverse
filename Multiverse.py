@@ -1,82 +1,114 @@
-# Multiverse version 7.3
-import hashlib, time, os.path, shutil, tarfile, queue, os
+# Multiverse version 8
+import hashlib, time, os.path, shutil, tarfile, os
 from pystray import Icon, Menu as menu, MenuItem as item
 from tkinter.filedialog import *
-from Assembler import *
+from Factory.factory import *
 from PIL import Image
 import tkinter as tk
 
-Service = 'C:\\Multiverse service\\'
-paused = False
-icon = True
+Service, temp, active, icon, files = None, None, False, None, None
 
-class Entry:
-    def compress(self):
-        tail, head = os.path.split(self.file)
-        archive = tarfile.open(Service + head + '.txz', 'w:xz')
-        shutil.copyfile(self.file, Service + 'temp\\' + str(self.depth) + '-' + head)
-        lol = [f for f in os.listdir(Service + 'temp\\') if os.path.isfile(os.path.join(Service + 'temp\\', f))]
-        for name in lol:
-            archive.add(Service + 'temp\\' + name, name)
-        archive.close()
-        shutil.rmtree(Service + 'temp', True)
+def compress(pack):
+    Service = pack.payload['service']
+    temp = pack.payload['temp']
+    _, head = os.path.split(pack.payload['file'])
+    archive = tarfile.open(Service + head + '.txz', 'w:xz')
+    shutil.copyfile(pack.payload['file'], temp + str(pack.payload['depth']) + '-' + head)
+    lol = [f for f in os.listdir(temp) if os.path.isfile(os.path.join(temp, f))]
+    for name in lol:
+        archive.add(temp + name, name)
+    archive.close()
+    shutil.rmtree(Service + 'temp', True)
     
-    def decompress(self):
-        tail, head = os.path.split(self.file)
-        archive = tarfile.open(Service + head + '.txz', 'r:*')
-        archive.extractall(Service + 'temp\\')
-        archive.close()
+def decompress(pack):
+    Service = pack.payload['service']
+    temp = pack.payload['temp']
+    _, head = os.path.split(pack.payload['file'])
+    archive = tarfile.open(Service + head + '.txz', 'r:*')
+    archive.extractall(temp)
+    archive.close()
 
-    def save(self):
-        tail, head = os.path.split(self.file)
-        if os.path.isfile(Service + head + '.txz'):
-            if os.path.isdir(Service + 'temp\\'): shutil.rmtree(Service + 'temp', True)
-            self.decompress()
-        else:
-            os.mkdir(Service + 'temp\\')
-        self.compress()
-        self.depth += 1
+def save(pack):
+    Service = pack.payload['service']
+    temp = pack.payload['temp']
+    _, head = os.path.split(pack.payload['file'])
+    if os.path.isfile(Service + head + '.txz'):
+        if os.path.isdir(temp): shutil.rmtree(Service + 'temp', True)
+        decompress(pack)
+    else:
+        os.makedirs(temp, exist_ok=True)
+        pack.payload['depth'] = 0
+    compress(pack)
+    pack.payload['depth'] += 1
 
-    def where(self):
-        tail, head = os.path.split(self.file)
-        if not os.path.isdir(Service):
-            os.mkdir(Service)
-        if os.path.isfile(Service + head + '.txz'):
-            self.decompress()
-            temps = [f for f in os.listdir(Service + 'temp\\') if os.path.isfile(Service + 'temp\\' + f)]
-            self.depth = len(temps)
-            shutil.rmtree(Service + 'temp', True)
+def where(pack):
+    global Service, temp
+    _, head = os.path.split(pack.payload['file'])
+    if not os.path.isdir(Service):
+        os.makedirs(Service)
+    if os.path.isfile(Service + head + '.txz'):
+        decompress(pack)
+        temps = [f for f in os.listdir(temp) if os.path.isfile(temp + f)]
+        pack.payload['depth'] = len(temps)
+        shutil.rmtree(Service + 'temp', True)
 
-    def hash(self):
-        with open(self.file, "rb") as f:
-            data = f.read()
-            hash_object = hashlib.sha256(data)
-            self.sum = hash_object.hexdigest()
+def hash(pack):
+    with open(pack.payload['file'], 'rb') as f:
+        data = f.read()
+        hash_object = hashlib.sha256(data)
+        pack.payload['sum'] = hash_object.hexdigest()
+     
+def Import(temps, factory):
+    if not os.path.isfile('files'):
+        file = open('files', 'w+')
+        file.close()
+    with open('files', 'r') as file:
+        string = file.read()
+    if string == '':
+        return list()
+    files = str.split(string, sep='\n')
+    newfiles = list()
+    for x in temps:
+        if x.payload['file'] in files:
+            newfiles.append(x)
+            files.remove(x.payload['file'])
+    for x in files:
+        pack = factory.get_pack()
+        pack.payload['file'] = x
+        pack.payload['depth'] = 0
+        pack.payload['service'] = Service
+        pack.payload['temp'] = temp
+        where(pack)
+        hash(pack)
+        pack.payload['prev'] = pack.payload['sum']
+        newfiles.append(pack)
+    return newfiles
 
-    def __init__(self):
-        self.prev = 0
-        self.sum = 0
-        self.file = ""
-        self.depth = 0
+def Process(pack):
+    hash(pack)
+    if pack.payload['prev'] != pack.payload['sum']:
+            pack.payload['prev'] = pack.payload['sum']
+            save(pack)
+    return pack
 
 def on_clicked():
     window = tk.Tk()
     window.title('Edit File')
 
-    text_box = tk.Text(window, height=20, width=50, font="Consolas 14")
+    text_box = tk.Text(window, height=20, width=100, font='Consolas 14')
     text_box.pack(expand=True, fill='both')
 
-    with open('Files.txt', 'r') as file:
+    with open('files', 'r') as file:
         text_box.insert('end', file.read())
 
     def save_changes():
-        with open('Files.txt', 'w') as file:
+        with open('files', 'w') as file:
             file.write(text_box.get('1.0', 'end-1c'))
 
     def open_files():
         files = askopenfilenames()
         for x in files[:-1]:
-            text_box.insert('end', (x + "\n"))
+            text_box.insert('end', (x.replace('/', '\\') + '\n'))
         text_box.insert('end', files[-1])
         pass
 
@@ -86,95 +118,54 @@ def on_clicked():
     open_button.pack()
     window.mainloop()
 
-def Importer(node):
-    newlist = node.input.get()
-    if not os.path.isfile('Files.txt'):
-        file = open('Files.txt', 'w+')
-        file.close()
-    with open('Files.txt', 'r') as file:
-        string = file.read()
-    if string == '':
-        node.output.put(list())
-        return
-    files = str.split(string, sep='\n')
-    temps = list()
-    for x in newlist:
-        if x.file in files:
-            temps.append(x)
-            files.remove(x.file)
-    for x in files:
-        entry = Entry()
-        entry.file = x
-        entry.where()
-        entry.hash()
-        entry.prev = entry.sum
-        temps.append(entry) 
-    node.output.put(temps)
-
-def Processor(node):
-    files = node.input.get()
-    for x in files:
-        x.hash()
-        if x.prev != x.sum:
-            x.prev = x.sum
-            x.save()
-    node.output.put(files)
-
 def onn():
-    global paused
-    global icon
-    paused = False
-    f = open('active', 'w+')
-    print('active', file=f, end='', flush=True)
-    f.close()
+    global active, icon, Service, temp
+    active = True
+    with open('status', 'w+') as f:
+        print('active', Service, temp, file=f, end='', sep='\n')
     with Image.open('Running.ico') as f:
         icon.icon = f
 
 def off():
-    global paused
-    global icon
-    paused = True
-    f = open('active', 'w+')
-    print('inactive', file=f, end='', flush=True)
-    f.close()
+    global active, icon, Service, temp
+    active = False
+    with open('status', 'w+') as f:
+        print('inactive', Service, temp, file=f, end='', sep='\n')
     with Image.open('Sleeping.ico') as f:
         icon.icon = f
 
-def main():
-    global paused
-    global icon
+if __name__ == '__main__':
+    factory = Factory((Process, ), processes=1)
 
-    if not os.path.isfile('active'):
-        open('active', 'w+').close()
+    if not os.path.isfile('status'):
+        with open('status', 'w+') as _:
+            print('inactive\nC:\\Multiverse service\\\nC:\\Multiverse service\\temp', file=_, end='')
         
-    with open('active', 'r') as file:
-        string = file.read()
-        
-        with Image.open("Running.ico") as f:
-            icon = Icon('Multiverse', f, menu=menu(
-                item('', on_clicked, visible=False, default=True),
-                item('On', onn),
-                item('Off', off)))
-            
-        if string == 'inactive':
-            paused = True
-            off()
-        else:
-            onn()
-            
+    with open('status', 'r') as _:
+        active, Service, temp = _.read().split(sep='\n')
+
+    with Image.open('Running.ico') as f:
+        icon = Icon('Multiverse', f, menu=menu(
+            item('', on_clicked, visible=False, default=True),
+            item('On', onn),
+            item('Off', off)))
         icon.run_detached()
-
-    entries = list()
-    importer = Assembler(queue.Queue(0), queue.Queue(0), Importer)
-    processor = Assembler(importer.output, queue.Queue(0), Processor)
-    importer.threads = 1
-    processor.threads = 1
-    importer.start()
-    processor.start()
-    importer.input.put(entries)
-    while (True):
-        if (not processor.output.empty()) and (not paused):
-            importer.input.put(processor.output.get())
-        time.sleep(5)
-        
-main()
+    if active == 'inactive':
+        off()
+    else:
+        onn()
+    files = list()
+    while True:
+        if active:
+            files = Import(files, factory)
+            temps = files
+            y = 0
+            for _ in range(factory.processes*2):
+                if len(temps) == 0:
+                    break
+                factory.add(temps.pop())
+                y+=1
+            for _ in range(y):
+                temps.append(factory.take())
+            files = temps
+        time.sleep(120)
