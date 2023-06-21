@@ -89,6 +89,7 @@ def Process(pack):
     if pack.payload['prev'] != pack.payload['sum']:
             pack.payload['prev'] = pack.payload['sum']
             save(pack)
+    pack.dst = 'out'
     return pack
 
 def on_clicked():
@@ -158,4 +159,6 @@ if __name__ == '__main__':
     while True:
         if active:
             files = factory.map(Import(files, factory))
+            for x in files:
+                x.dst = 0
         time.sleep(1)
