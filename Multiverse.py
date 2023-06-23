@@ -6,7 +6,7 @@ from Factory.factory import *
 from PIL import Image
 import tkinter as tk
 
-Service, temp, active, icon, files = None, None, False, None, None
+Service, temp, active, icon, files = None, None, None, None, None
 
 def compress(pack):
     Service = pack.payload['service']
@@ -121,7 +121,7 @@ def on_clicked():
 
 def onn():
     global active, icon, Service, temp
-    active = True
+    active = 'active'
     with open('status', 'w+') as f:
         print('active', Service, temp, file=f, end='', sep='\n')
     with Image.open('Running.ico') as f:
@@ -129,7 +129,7 @@ def onn():
 
 def off():
     global active, icon, Service, temp
-    active = False
+    active = 'inactive'
     with open('status', 'w+') as f:
         print('inactive', Service, temp, file=f, end='', sep='\n')
     with Image.open('Sleeping.ico') as f:
@@ -151,14 +151,13 @@ if __name__ == '__main__':
             item('On', onn),
             item('Off', off)))
         icon.run_detached()
-    if active == 'inactive':
-        off()
-    else:
-        onn()
+
     files = list()
     while True:
-        if active:
+        if active == 'inactive':
+            off()
+        if active == 'active':
+            onn()
             files = factory.map(Import(files, factory))
-            for x in files:
-                x.dst = 0
-        time.sleep(1)
+            for x in files: x.dst = 0
+        time.sleep(120)
