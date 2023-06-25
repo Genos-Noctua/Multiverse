@@ -154,8 +154,7 @@ if __name__ == '__main__':
 
     files = list()
     while True:
-        if active == 'inactive':
-            off()
+        if active == 'inactive': off()
         if active == 'active':
             onn()
             files = factory.map(Import(files, factory))
