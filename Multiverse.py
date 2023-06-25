@@ -152,6 +152,9 @@ if __name__ == '__main__':
             item('Off', off)))
         icon.run_detached()
 
+    if active == 'inactive': off()
+    if active == 'active': onn()
+    
     files = list()
     while True:
         if active == 'inactive': off()
