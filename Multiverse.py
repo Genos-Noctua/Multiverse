@@ -18,7 +18,7 @@ def compress(pack):
     for name in lol:
         archive.add(temp + name, name)
     archive.close()
-    shutil.rmtree(Service + 'temp', True)
+    shutil.rmtree(temp, True)
 
 def decompress(pack):
     Service = pack.payload['service']
@@ -33,7 +33,7 @@ def save(pack):
     temp = pack.payload['temp']
     _, head = os.path.split(pack.payload['file'])
     if os.path.isfile(Service + head + '.txz'):
-        if os.path.isdir(temp): shutil.rmtree(Service + 'temp', True)
+        if os.path.isdir(temp): shutil.rmtree(temp, True)
         decompress(pack)
     else:
         os.makedirs(temp, exist_ok=True)
@@ -50,7 +50,7 @@ def where(pack):
         decompress(pack)
         temps = [f for f in os.listdir(temp) if os.path.isfile(temp + f)]
         pack.payload['depth'] = len(temps)
-        shutil.rmtree(Service + 'temp', True)
+        shutil.rmtree(temp, True)
 
 def hash(pack):
     with open(pack.payload['file'], 'rb') as f:
