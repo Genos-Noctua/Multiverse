@@ -6,7 +6,7 @@ from Factory.factory import *
 from PIL import Image
 import tkinter as tk
 
-Service, temp, active, icon, files = None, None, None, None, None
+Service = temp = active = icon = files = None
 
 def compress(pack):
     Service = pack.payload['service']
@@ -41,17 +41,6 @@ def save(pack):
     compress(pack)
     pack.payload['depth'] += 1
 
-def where(pack):
-    global Service, temp
-    _, head = os.path.split(pack.payload['file'])
-    if not os.path.isdir(Service):
-        os.makedirs(Service)
-    if os.path.isfile(Service + head + '.txz'):
-        decompress(pack)
-        temps = [f for f in os.listdir(temp) if os.path.isfile(temp + f)]
-        pack.payload['depth'] = len(temps)
-        shutil.rmtree(temp, True)
-
 def hash(pack):
     with open(pack.payload['file'], 'rb') as f:
         data = f.read()
@@ -59,6 +48,7 @@ def hash(pack):
         pack.payload['sum'] = hash_object.hexdigest()
      
 def Import(temps, factory):
+    global Service, temp
     if not os.path.isfile('files'):
         file = open('files', 'w+')
         file.close()
@@ -78,7 +68,14 @@ def Import(temps, factory):
         pack.payload['depth'] = 0
         pack.payload['service'] = Service
         pack.payload['temp'] = temp
-        where(pack)
+        _, head = os.path.split(pack.payload['file'])
+        if not os.path.isdir(Service):
+            os.makedirs(Service)
+        if os.path.isfile(Service + head + '.txz'):
+            decompress(pack)
+            temps = [f for f in os.listdir(temp) if os.path.isfile(temp + f)]
+            pack.payload['depth'] = len(temps)
+            shutil.rmtree(temp, True)
         hash(pack)
         pack.payload['prev'] = pack.payload['sum']
         newfiles.append(pack)
