@@ -2,18 +2,17 @@
 import hashlib, time, os.path, shutil, tarfile, os
 from pystray import Icon, Menu as menu, MenuItem as item
 from tkinter.filedialog import *
-from Factory.factory import *
 from PIL import Image
 import tkinter as tk
 
 Service = temp = active = icon = files = None
 
 def compress(pack):
-    Service = pack.payload['service']
-    temp = pack.payload['temp']
-    _, head = os.path.split(pack.payload['file'])
+    Service = pack['service']
+    temp = pack['temp']
+    _, head = os.path.split(pack['file'])
     archive = tarfile.open(Service + head + '.txz', 'w:xz')
-    shutil.copyfile(pack.payload['file'], temp + str(pack.payload['depth']) + '-' + head)
+    shutil.copyfile(pack['file'], temp + str(pack['depth']) + '-' + head)
     lol = [f for f in os.listdir(temp) if os.path.isfile(os.path.join(temp, f))]
     for name in lol:
         archive.add(temp + name, name)
@@ -21,33 +20,33 @@ def compress(pack):
     shutil.rmtree(temp, True)
 
 def decompress(pack):
-    Service = pack.payload['service']
-    temp = pack.payload['temp']
-    _, head = os.path.split(pack.payload['file'])
+    Service = pack['service']
+    temp = pack['temp']
+    _, head = os.path.split(pack['file'])
     archive = tarfile.open(Service + head + '.txz', 'r:*')
     archive.extractall(temp)
     archive.close()
 
 def save(pack):
-    Service = pack.payload['service']
-    temp = pack.payload['temp']
-    _, head = os.path.split(pack.payload['file'])
+    Service = pack['service']
+    temp = pack['temp']
+    _, head = os.path.split(pack['file'])
     if os.path.isfile(Service + head + '.txz'):
         if os.path.isdir(temp): shutil.rmtree(temp, True)
         decompress(pack)
     else:
         os.makedirs(temp, exist_ok=True)
-        pack.payload['depth'] = 0
+        pack['depth'] = 0
     compress(pack)
-    pack.payload['depth'] += 1
+    pack['depth'] += 1
 
 def hash(pack):
-    with open(pack.payload['file'], 'rb') as f:
+    with open(pack['file'], 'rb') as f:
         data = f.read()
         hash_object = hashlib.sha256(data)
-        pack.payload['sum'] = hash_object.hexdigest()
+        pack['sum'] = hash_object.hexdigest()
      
-def Import(temps, factory):
+def Import(temps):
     global Service, temp
     if not os.path.isfile('files'):
         file = open('files', 'w+')
@@ -59,35 +58,32 @@ def Import(temps, factory):
     files = str.split(string, sep='\n')
     newfiles = list()
     for x in temps:
-        if x.payload['file'] in files:
+        if x['file'] in files:
             newfiles.append(x)
-            files.remove(x.payload['file'])
+            files.remove(x['file'])
     for x in files:
-        pack = factory.get_pack()
-        pack.payload['file'] = x
-        pack.payload['depth'] = 0
-        pack.payload['service'] = Service
-        pack.payload['temp'] = temp
-        _, head = os.path.split(pack.payload['file'])
+        pack = {}
+        pack['file'] = x
+        pack['depth'] = 0
+        pack['service'] = Service
+        pack['temp'] = temp
+        _, head = os.path.split(pack['file'])
         if not os.path.isdir(Service):
             os.makedirs(Service)
         if os.path.isfile(Service + head + '.txz'):
             decompress(pack)
             temps = [f for f in os.listdir(temp) if os.path.isfile(temp + f)]
-            pack.payload['depth'] = len(temps)
+            pack['depth'] = len(temps)
             shutil.rmtree(temp, True)
         hash(pack)
-        pack.payload['prev'] = pack.payload['sum']
+        pack['prev'] = pack['sum']
         newfiles.append(pack)
+    for pack in newfiles:
+        hash(pack)
+        if pack['prev'] != pack['sum']:
+                pack['prev'] = pack['sum']
+                save(pack)
     return newfiles
-
-def Process(pack):
-    hash(pack)
-    if pack.payload['prev'] != pack.payload['sum']:
-            pack.payload['prev'] = pack.payload['sum']
-            save(pack)
-    pack.dst = 'out'
-    return pack
 
 def on_clicked():
     window = tk.Tk()
@@ -133,8 +129,6 @@ def off():
         icon.icon = f
 
 if __name__ == '__main__':
-    factory = Factory((Process, ), processes=1)
-
     if not os.path.isfile('status'):
         with open('status', 'w+') as _:
             print('inactive\nC:\\Multiverse service\\\nC:\\Multiverse service\\temp', file=_, end='')
@@ -157,6 +151,5 @@ if __name__ == '__main__':
         if active == 'inactive': off()
         if active == 'active':
             onn()
-            files = factory.map(Import(files, factory))
-            for x in files: x.dst = 0
+            files = Import(files)
         time.sleep(120)
